@@ -1,8 +1,27 @@
 import shutil
+import logging
+import os
+from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 
 console = Console()
+
+def get_logger():
+    log_dir = Path.home() / ".chillguy"
+    if not log_dir.exists():
+        log_dir.mkdir(parents=True)
+    
+    log_file = log_dir / "chillguy.log"
+    
+    logging.basicConfig(
+        filename=str(log_file),
+        level=logging.DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    return logging.getLogger("chillguy")
+
+logger = get_logger()
 
 def check_dependencies():
     """Checks if required system tools are installed."""

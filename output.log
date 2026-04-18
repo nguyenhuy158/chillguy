@@ -1,0 +1,172 @@
+Warning: Input is not a terminal (fd=0).
+╭───────────────────── Traceback (most recent call last) ──────────────────────╮
+│ /Users/huyntq/.pyenv/versions/3.10.7/lib/python3.10/asyncio/selector_events. │
+│ py:256 in _add_reader                                                        │
+│                                                                              │
+│    253 │   │   self._check_closed()                                          │
+│    254 │   │   handle = events.Handle(callback, args, self, None)            │
+│    255 │   │   try:                                                          │
+│ ❱  256 │   │   │   key = self._selector.get_key(fd)                          │
+│    257 │   │   except KeyError:                                              │
+│    258 │   │   │   self._selector.register(fd, selectors.EVENT_READ,         │
+│    259 │   │   │   │   │   │   │   │   │   (handle, None))                   │
+│                                                                              │
+│ /Users/huyntq/.pyenv/versions/3.10.7/lib/python3.10/selectors.py:193 in      │
+│ get_key                                                                      │
+│                                                                              │
+│   190 │   │   try:                                                           │
+│   191 │   │   │   return mapping[fileobj]                                    │
+│   192 │   │   except KeyError:                                               │
+│ ❱ 193 │   │   │   raise KeyError("{!r} is not registered".format(fileobj)) f │
+│   194 │                                                                      │
+│   195 │   @abstractmethod                                                    │
+│   196 │   def get_map(self):                                                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+KeyError: '0 is not registered'
+
+During handling of the above exception, another exception occurred:
+
+╭───────────────────── Traceback (most recent call last) ──────────────────────╮
+│ /Users/huyntq/Documents/chillguy/src/chillguy/main.py:130 in play            │
+│                                                                              │
+│   127 │   │   selected_index = questionary.select(                           │
+│   128 │   │   │   "Select a track:",                                         │
+│   129 │   │   │   choices=choices                                            │
+│ ❱ 130 │   │   ).ask()                                                        │
+│   131 │   │                                                                  │
+│   132 │   │   if selected_index is None:                                     │
+│   133 │   │   │   return                                                     │
+│                                                                              │
+│ /Users/huyntq/.pyenv/versions/3.10.7/lib/python3.10/site-packages/questionar │
+│ y/question.py:64 in ask                                                      │
+│                                                                              │
+│    61 │   │   """                                                            │
+│    62 │   │                                                                  │
+│    63 │   │   try:                                                           │
+│ ❱  64 │   │   │   return self.unsafe_ask(patch_stdout)                       │
+│    65 │   │   except KeyboardInterrupt:                                      │
+│    66 │   │   │   print("{}".format(kbi_msg))                                │
+│    67 │   │   │   return None                                                │
+│                                                                              │
+│ /Users/huyntq/.pyenv/versions/3.10.7/lib/python3.10/site-packages/questionar │
+│ y/question.py:89 in unsafe_ask                                               │
+│                                                                              │
+│    86 │   │   │   with prompt_toolkit.patch_stdout.patch_stdout():           │
+│    87 │   │   │   │   return self.application.run()                          │
+│    88 │   │   else:                                                          │
+│ ❱  89 │   │   │   return self.application.run()                              │
+│    90 │                                                                      │
+│    91 │   def skip_if(self, condition: bool, default: Any = None) -> "Questi │
+│    92 │   │   """Skip the question if flag is set and return the default ins │
+│                                                                              │
+│ /Users/huyntq/.pyenv/versions/3.10.7/lib/python3.10/site-packages/prompt_too │
+│ lkit/application/application.py:1002 in run                                  │
+│                                                                              │
+│    999 │   │                                                                 │
+│   1000 │   │   else:                                                         │
+│   1001 │   │   │   # No loop installed. Run like usual.                      │
+│ ❱ 1002 │   │   │   return asyncio.run(coro)                                  │
+│   1003 │                                                                     │
+│   1004 │   def _handle_exception(                                            │
+│   1005 │   │   self, loop: AbstractEventLoop, context: dict[str, Any]        │
+│                                                                              │
+│ /Users/huyntq/.pyenv/versions/3.10.7/lib/python3.10/asyncio/runners.py:44 in │
+│ run                                                                          │
+│                                                                              │
+│   41 │   │   events.set_event_loop(loop)                                     │
+│   42 │   │   if debug is not None:                                           │
+│   43 │   │   │   loop.set_debug(debug)                                       │
+│ ❱ 44 │   │   return loop.run_until_complete(main)                            │
+│   45 │   finally:                                                            │
+│   46 │   │   try:                                                            │
+│   47 │   │   │   _cancel_all_tasks(loop)                                     │
+│                                                                              │
+│ /Users/huyntq/.pyenv/versions/3.10.7/lib/python3.10/asyncio/base_events.py:6 │
+│ 46 in run_until_complete                                                     │
+│                                                                              │
+│    643 │   │   if not future.done():                                         │
+│    644 │   │   │   raise RuntimeError('Event loop stopped before Future comp │
+│    645 │   │                                                                 │
+│ ❱  646 │   │   return future.result()                                        │
+│    647 │                                                                     │
+│    648 │   def stop(self):                                                   │
+│    649 │   │   """Stop running the event loop.                               │
+│                                                                              │
+│ /Users/huyntq/.pyenv/versions/3.10.7/lib/python3.10/site-packages/prompt_too │
+│ lkit/application/application.py:886 in run_async                             │
+│                                                                              │
+│    883 │   │   │   f = stack.enter_context(create_future(loop))              │
+│    884 │   │   │                                                             │
+│    885 │   │   │   try:                                                      │
+│ ❱  886 │   │   │   │   return await _run_async(f)                            │
+│    887 │   │   │   finally:                                                  │
+│    888 │   │   │   │   # Wait for the background tasks to be done. This need │
+│    889 │   │   │   │   # go in the finally! If `_run_async` raises           │
+│                                                                              │
+│ /Users/huyntq/.pyenv/versions/3.10.7/lib/python3.10/site-packages/prompt_too │
+│ lkit/application/application.py:734 in _run_async                            │
+│                                                                              │
+│    731 │   │   │   │   │   │   f.set_exception(EOFError)                     │
+│    732 │   │   │                                                             │
+│    733 │   │   │   # Enter raw mode, attach input and attach WINCH event han │
+│ ❱  734 │   │   │   with self.input.raw_mode(), self.input.attach(            │
+│    735 │   │   │   │   read_from_input_in_context                            │
+│    736 │   │   │   ), attach_winch_signal_handler(self._on_resize):          │
+│    737 │   │   │   │   # Draw UI.                                            │
+│                                                                              │
+│ /Users/huyntq/.pyenv/versions/3.10.7/lib/python3.10/contextlib.py:135 in     │
+│ __enter__                                                                    │
+│                                                                              │
+│   132 │   │   # they are only needed for recreation, which is not possible a │
+│   133 │   │   del self.args, self.kwds, self.func                            │
+│   134 │   │   try:                                                           │
+│ ❱ 135 │   │   │   return next(self.gen)                                      │
+│   136 │   │   except StopIteration:                                          │
+│   137 │   │   │   raise RuntimeError("generator didn't yield") from None     │
+│   138                                                                        │
+│                                                                              │
+│ /Users/huyntq/.pyenv/versions/3.10.7/lib/python3.10/site-packages/prompt_too │
+│ lkit/input/vt100.py:165 in _attached_input                                   │
+│                                                                              │
+│   162 │   │   callback()                                                     │
+│   163 │                                                                      │
+│   164 │   try:                                                               │
+│ ❱ 165 │   │   loop.add_reader(fd, callback_wrapper)                          │
+│   166 │   except PermissionError:                                            │
+│   167 │   │   # For `EPollSelector`, adding /dev/null to the event loop will │
+│   168 │   │   # `PermissionError` (that doesn't happen for `SelectSelector`  │
+│                                                                              │
+│ /Users/huyntq/.pyenv/versions/3.10.7/lib/python3.10/asyncio/selector_events. │
+│ py:331 in add_reader                                                         │
+│                                                                              │
+│    328 │   def add_reader(self, fd, callback, *args):                        │
+│    329 │   │   """Add a reader callback."""                                  │
+│    330 │   │   self._ensure_fd_no_transport(fd)                              │
+│ ❱  331 │   │   self._add_reader(fd, callback, *args)                         │
+│    332 │                                                                     │
+│    333 │   def remove_reader(self, fd):                                      │
+│    334 │   │   """Remove a reader callback."""                               │
+│                                                                              │
+│ /Users/huyntq/.pyenv/versions/3.10.7/lib/python3.10/asyncio/selector_events. │
+│ py:258 in _add_reader                                                        │
+│                                                                              │
+│    255 │   │   try:                                                          │
+│    256 │   │   │   key = self._selector.get_key(fd)                          │
+│    257 │   │   except KeyError:                                              │
+│ ❱  258 │   │   │   self._selector.register(fd, selectors.EVENT_READ,         │
+│    259 │   │   │   │   │   │   │   │   │   (handle, None))                   │
+│    260 │   │   else:                                                         │
+│    261 │   │   │   mask, (reader, writer) = key.events, key.data             │
+│                                                                              │
+│ /Users/huyntq/.pyenv/versions/3.10.7/lib/python3.10/selectors.py:523 in      │
+│ register                                                                     │
+│                                                                              │
+│   520 │   │   │   │   if events & EVENT_READ:                                │
+│   521 │   │   │   │   │   kev = select.kevent(key.fd, select.KQ_FILTER_READ, │
+│   522 │   │   │   │   │   │   │   │   │   │   select.KQ_EV_ADD)              │
+│ ❱ 523 │   │   │   │   │   self._selector.control([kev], 0, 0)                │
+│   524 │   │   │   │   if events & EVENT_WRITE:                               │
+│   525 │   │   │   │   │   kev = select.kevent(key.fd, select.KQ_FILTER_WRITE │
+│   526 │   │   │   │   │   │   │   │   │   │   select.KQ_EV_ADD)              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+OSError: [Errno 22] Invalid argument

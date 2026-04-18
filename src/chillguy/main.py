@@ -7,6 +7,7 @@ from .config import init_config, load_config, get_favorites, add_favorite
 from .search import search_youtube, get_stream_url
 from .player import Player
 from .ui import interactive_player
+from .utils import logger
 import sys
 from threading import Thread
 import readchar
@@ -36,12 +37,12 @@ def key_listener(p: Player):
             elif key == 'f':
                 if current_track_data:
                     if add_favorite(current_track_data):
-                        # Show some feedback if possible
-                        pass
+                        logger.info(f"Added {current_track_data['title']} to favorites.")
             elif key == 'q':
                 p.stop()
                 break
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Key listener error: {e}")
             break
 
 @app.command()
@@ -71,14 +72,24 @@ def play_track(track):
     global current_track_data
     current_track_data = track
     
+    logger.info(f"Preparing to play: {track['title']}")
     with console.status(f"[bold green]Fetching stream for {track['title']}..."):
-        stream_url = get_stream_url(track['id'] if 'id' in track else track['url'])
+        try:
+            stream_url = get_stream_url(track['id'] if 'id' in track else track['url'])
+        except Exception as e:
+            logger.exception("Failed to get stream URL")
+            console.print(f"[red]Error fetching stream: {e}[/red]")
+            return
 
     if not stream_url:
+        logger.error("Could not extract stream URL.")
         console.print("[red]Could not extract stream URL.[/red]")
         return
 
-    player.start(stream_url, track['title'])
+    if not player.start(stream_url, track['title']):
+        logger.error("Player failed to start.")
+        console.print("[red]Failed to start playback. Check ~/.chillguy/chillguy.log for details.[/red]")
+        return
     
     # Start key listener thread
     kt = Thread(target=key_listener, args=(player,), daemon=True)
@@ -88,6 +99,8 @@ def play_track(track):
         interactive_player(player, track['title'])
     except KeyboardInterrupt:
         player.stop()
+    except Exception as e:
+        logger.exception("Error in interactive player")
     finally:
         player.stop()
 
@@ -110,18 +123,21 @@ def play(query: str = typer.Argument(None, help="Search query or YouTube URL")):
 
     # If multiple results, let user choose
     if len(results) > 1:
-        choices = [f"{r['title']} ({r.get('duration_string', '??:??')})" for r in results]
-        selected_index = questionary.select(
-            "Select a track:",
-            choices=choices
-        ).ask()
-        
-        if selected_index is None:
-            return
-        
-        # Get actual index
-        idx = choices.index(selected_index)
-        selected = results[idx]
+        if not sys.stdin.isatty():
+            logger.info("Not a TTY, auto-selecting first result.")
+            selected = results[0]
+        else:
+            choices = [f"{r['title']} ({r.get('duration_string', '??:??')})" for r in results]
+            selected_label = questionary.select(
+                "Select a track:",
+                choices=choices
+            ).ask()
+            
+            if selected_label is None:
+                return
+            
+            idx = choices.index(selected_label)
+            selected = results[idx]
     else:
         selected = results[0]
 

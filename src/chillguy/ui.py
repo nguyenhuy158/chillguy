@@ -8,6 +8,7 @@ from rich import box
 import time
 import readchar
 from .player import Player
+from .utils import logger
 
 console = Console()
 

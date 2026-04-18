@@ -1,6 +1,6 @@
 [project]
 name = "chillguy"
-version = "0.1.1"
+version = "0.1.2"
 description = "A terminal-based YouTube music player designed for simplicity and style."
 authors = [{ name = "Nguyen Huy", email = "nguyenhuy158@gmail.com" }]
 dependencies = [
@@ -12,7 +12,7 @@ dependencies = [
     "readchar>=4.0.5",
 ]
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
 license-files = ["LICENSE"]
 
 [project.scripts]

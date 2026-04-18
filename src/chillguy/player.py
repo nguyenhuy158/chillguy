@@ -5,11 +5,12 @@ import os
 import tempfile
 import time
 from threading import Thread
+from .utils import logger
 
 class Player:
     def __init__(self):
         self.process = None
-        self.ipc_path = os.path.join(tempfile.gettempdir(), "chillguy_mpv.sock")
+        self.ipc_path = os.path.join(tempfile.gettempdir(), f"chillguy_mpv_{os.getpid()}.sock")
         self.current_track = None
         self._stop_requested = False
 
@@ -17,6 +18,8 @@ class Player:
         self.stop()
         self.current_track = title
         self._stop_requested = False
+        
+        logger.info(f"Starting mpv for track: {title}")
         
         # Ensure old socket is gone
         if os.path.exists(self.ipc_path):
@@ -27,16 +30,37 @@ class Player:
             "--no-video",
             f"--input-ipc-server={self.ipc_path}",
             "--idle=yes",
+            "--force-window=no",
             url
         ]
         
-        self.process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-        # Wait a bit for IPC to start
-        time.sleep(1)
+        try:
+            self.process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            # Wait for IPC to start with timeout
+            max_retries = 20
+            for i in range(max_retries):
+                if os.path.exists(self.ipc_path):
+                    logger.info("mpv IPC socket found.")
+                    break
+                if self.process.poll() is not None:
+                    error_output = self.process.stderr.read()
+                    logger.error(f"mpv exited immediately with code {self.process.returncode}: {error_output}")
+                    return False
+                time.sleep(0.1)
+            else:
+                logger.error("mpv IPC socket timed out.")
+                return False
+                
+            return True
+        except Exception as e:
+            logger.exception("Failed to start mpv process")
+            return False
 
     def _send_command(self, *args):
         if not os.path.exists(self.ipc_path):
@@ -44,13 +68,17 @@ class Player:
         
         try:
             client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            client.settimeout(0.5)
             client.connect(self.ipc_path)
             command = {"command": list(args)}
             client.send(json.dumps(command).encode() + b"\n")
-            res = client.recv(1024)
+            res = client.recv(4096)
             client.close()
+            if not res:
+                return None
             return json.loads(res.decode())
-        except Exception:
+        except Exception as e:
+            logger.debug(f"IPC command failed: {args} - {e}")
             return None
 
     def toggle_pause(self):
