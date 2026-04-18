@@ -230,7 +230,9 @@ def play_queue():
         track = player.queue[player.current_index]
         current_track_data = track
         add_to_history(track)
-        with console.status(f"[bold green]Streaming {track['title']}..."):
+        from rich.markup import escape
+        safe_title = escape(track['title'])
+        with console.status(f"[bold green]Streaming {safe_title}..."):
             try:
                 url = get_stream_url(track.get('id') or track.get('url'))
                 if not url or not player.start(url, track['title']):

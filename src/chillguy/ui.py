@@ -18,9 +18,16 @@ from .config import load_config
 
 console = Console()
 
+from rich.markup import escape
+
+console = Console()
+
 def get_theme_style():
-    config = load_config()
-    theme = config.get("ui", {}).get("theme", "chill")
+    try:
+        config = load_config()
+        theme = config.get("ui", {}).get("theme", "chill")
+    except Exception:
+        theme = "chill"
     
     themes = {
         "chill": "cyan",
@@ -37,8 +44,11 @@ def select_interactive(prompt: str, choices: list[str]) -> str | None:
     if not choices:
         return None
         
-    config = load_config()
-    use_fzf = config.get("ui", {}).get("use_fzf", "auto")
+    try:
+        config = load_config()
+        use_fzf = config.get("ui", {}).get("use_fzf", "auto")
+    except Exception:
+        use_fzf = "auto"
     
     fzf_available = shutil.which("fzf") is not None
     
@@ -85,6 +95,8 @@ def create_player_layout(player: Player, position, duration, volume, paused, lyr
     track_title = "Nothing playing"
     if player.current_track:
         track_title = player.current_track.get('title', 'Unknown')
+        # Clean title of any newlines or weird chars that might break UI
+        track_title = track_title.replace('\n', ' ').replace('\r', ' ').strip()
         if len(track_title) > 50:
             track_title = track_title[:47] + "..."
 
@@ -102,14 +114,21 @@ def create_player_layout(player: Player, position, duration, volume, paused, lyr
         progress = (position / duration) * 100
         
     def format_time(seconds):
-        if not seconds: return "00:00"
+        if seconds is None or seconds < 0: return "00:00"
         m, s = divmod(int(seconds), 60)
         return f"{m:02d}:{s:02d}"
 
     # Main Player Panel
+    # Use escape() to handle titles with [ or ]
+    safe_title = escape(track_title)
+    
+    time_info = f"{format_time(position)} / {format_time(duration)}"
+    if position == 0 and duration == 0:
+        time_info = "Loading..."
+
     track_info = (
-        f"[bold white]{track_title}[/bold white]\n"
-        f"{format_time(position)} / {format_time(duration)}\n"
+        f"[bold white]{safe_title}[/bold white]\n"
+        f"{time_info}\n"
         f"Volume: {volume}% | Shuffle: {'On' if player.shuffle else 'Off'} | Repeat: {player.repeat}"
     )
     

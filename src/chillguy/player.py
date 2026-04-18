@@ -12,7 +12,8 @@ from .utils import logger
 class Player:
     def __init__(self):
         self.process = None
-        self.ipc_path = os.path.join(tempfile.gettempdir(), f"chillguy_mpv_{os.getpid()}.sock")
+        # Use a shorter path for the socket to avoid macOS AF_UNIX length limits
+        self.ipc_path = f"/tmp/cg_{os.getpid()}.s"
         self.queue = []
         self.current_index = -1
         self.shuffle = False
@@ -51,13 +52,21 @@ class Player:
             except OSError:
                 pass
 
+        # Load initial volume from config
+        from .config import load_config
+        config = load_config()
+        initial_volume = config.get("player", {}).get("volume", 100)
+
         cmd = [
             "mpv",
             "--no-video",
+            "--vid=no",
+            "--audio-display=no",
             f"--input-ipc-server={self.ipc_path}",
             "--idle=yes",
             "--force-window=no",
             "--no-terminal",
+            f"--volume={initial_volume}",
             f"--force-media-title={title}",
             url
         ]
@@ -69,16 +78,16 @@ class Player:
                 stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
-                preexec_fn=os.setsid # Create process group to kill children too
+                preexec_fn=os.setsid if hasattr(os, "setsid") else None
             )
             
             # Wait for IPC to start with timeout
-            max_retries = 30 
+            max_retries = 50 # Increased
             for i in range(max_retries):
                 if os.path.exists(self.ipc_path):
-                    # Test connection
+                    # Test connection with a generic property
                     if self._send_command("get_property", "mpv-version"):
-                        logger.info("mpv IPC socket found and responding.")
+                        logger.info(f"mpv IPC socket found and responding at {self.ipc_path}")
                         break
                 if self.process.poll() is not None:
                     error_output = self.process.stderr.read()
@@ -86,7 +95,7 @@ class Player:
                     return False
                 time.sleep(0.1)
             else:
-                logger.error("mpv IPC socket timed out or not responding.")
+                logger.error(f"mpv IPC socket timed out or not responding at {self.ipc_path}")
                 return False
                 
             return True
