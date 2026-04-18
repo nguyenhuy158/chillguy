@@ -1,4 +1,4 @@
-from rich.console import Console
+from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
 from rich.progress import ProgressBar
@@ -53,9 +53,6 @@ def select_interactive(prompt: str, choices: list[str]) -> str | None:
     
     if should_use_fzf:
         try:
-            # fzf uses stderr for the UI, so we need to handle that if needed
-            # but usually it's fine to just run it.
-            # We pass choices via stdin.
             input_str = "\n".join(choices)
             cmd = ["fzf", "--height", "40%", "--layout=reverse", "--border", "--prompt", f"{prompt} > "]
             
@@ -74,9 +71,7 @@ def select_interactive(prompt: str, choices: list[str]) -> str | None:
             return None
         except Exception as e:
             logger.error(f"fzf failed: {e}. Falling back to questionary.")
-            # Fallback to questionary below
             
-    # Fallback to questionary
     try:
         return questionary.select(prompt, choices=choices).ask()
     except Exception as e:
@@ -121,7 +116,7 @@ def create_player_layout(player: Player, position, duration, volume, paused, lyr
     pb = ProgressBar(total=100, completed=progress, width=40)
     
     player_panel = Panel(
-        Text.from_markup(track_info) + "\n\n" + Text.from_rich_text(pb),
+        Group(Text.from_markup(track_info), "", pb),
         title="Now Playing",
         box=box.ROUNDED,
         padding=(1, 2),
@@ -154,59 +149,6 @@ def create_player_layout(player: Player, position, duration, volume, paused, lyr
         Layout(header, size=3),
         Layout(name="main"),
         Layout(footer_panel, size=3)
-    )
-
-    
-    # Progress
-    progress = 0
-    if duration and duration > 0:
-        progress = (position / duration) * 100
-        
-    def format_time(seconds):
-        if not seconds: return "00:00"
-        m, s = divmod(int(seconds), 60)
-        return f"{m:02d}:{s:02d}"
-
-    # Main Player Panel
-    track_info = (
-        f"[bold white]{track_title}[/bold white]\n"
-        f"{format_time(position)} / {format_time(duration)}\n"
-        f"Volume: {volume}% | Shuffle: {'On' if player.shuffle else 'Off'} | Repeat: {player.repeat}"
-    )
-    
-    pb = ProgressBar(total=100, completed=progress, width=40)
-    
-    player_panel = Panel(
-        Text.from_markup(track_info) + "\n\n" + Text.from_rich_text(pb),
-        title="Now Playing",
-        box=box.ROUNDED,
-        padding=(1, 2)
-    )
-    
-    # Queue Panel
-    queue_table = Table(box=box.SIMPLE, expand=True)
-    queue_table.add_column("Up Next", style="dim")
-    
-    for i, track in enumerate(player.queue[player.current_index + 1 : player.current_index + 6]):
-        title = track.get('title', 'Unknown')
-        if len(title) > 30: title = title[:27] + "..."
-        queue_table.add_row(f"{i+1}. {title}")
-        
-    queue_panel = Panel(queue_table, title="Queue", box=box.ROUNDED)
-
-    # Lyrics/Side Panel
-    lyrics_panel = Panel(lyrics or "[dim]No lyrics available[/dim]", title="Lyrics", box=box.ROUNDED)
-
-    # Footer
-    controls = Table.grid(expand=True)
-    controls.add_column(justify="left")
-    controls.add_row(r"[dim]\[space] Play/Pause  \[n/b] Next/Prev  \[<-/->] Seek 5s  \[+/-] Vol  \[s] Shuffle  \[r] Repeat  \[q] Quit[/dim]")
-
-    # Split layout
-    layout.split_column(
-        Layout(header, size=3),
-        Layout(name="main"),
-        Layout(Panel(controls, box=box.MINIMAL), size=3)
     )
     
     layout["main"].split_row(
