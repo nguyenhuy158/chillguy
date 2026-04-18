@@ -54,9 +54,15 @@ def doctor():
     """Check if system dependencies are installed."""
     run_doctor()
 
-@app.command()
-def config():
+config_app = typer.Typer(help="Manage configuration.")
+app.add_typer(config_app, name="config")
+
+@config_app.callback(invoke_without_command=True)
+def config_main(ctx: typer.Context):
     """Show current configuration."""
+    if ctx.invoked_subcommand is not None:
+        return
+
     init_config()
     cfg = load_config()
     path = get_config_path()
@@ -76,6 +82,21 @@ def config():
             table.add_row("root", section, str(values))
             
     console.print(table)
+
+@config_app.command()
+def edit():
+    """Edit configuration file in your default editor."""
+    init_config()
+    path = get_config_path()
+    editor = os.environ.get("EDITOR", "nano")
+    
+    console.print(f"[bold cyan]Opening {path} with {editor}...[/bold cyan]")
+    try:
+        import subprocess
+        subprocess.run([editor, str(path)], check=True)
+    except Exception as e:
+        console.print(f"[red]Failed to open editor: {e}[/red]")
+        console.print(f"You can manually edit the file at: [bold]{path}[/bold]")
 
 @app.command()
 def favorites(
