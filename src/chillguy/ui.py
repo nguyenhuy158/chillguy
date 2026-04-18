@@ -46,7 +46,7 @@ def create_player_layout(track_title, position, duration, volume, paused):
     # Controls Help
     controls = Table.grid(expand=True)
     controls.add_column(justify="left")
-    controls.add_row("[dim]\[space] Play/Pause  \[<-/->] Seek 5s  \[+/-] Vol  \[q] Quit[/dim]")
+    controls.add_row(r"[dim]\[space] Play/Pause  \[<-/->] Seek 5s  \[+/-] Vol  \[q] Quit[/dim]")
     
     layout.split_column(
         Layout(header, size=3),

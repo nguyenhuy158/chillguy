@@ -131,7 +131,7 @@ def play(query: str = typer.Argument(None, help="Search query or YouTube URL")):
 def main(ctx: typer.Context):
     if ctx.invoked_subcommand is None:
         console.print(Panel("[bold cyan]Chillguy[/bold cyan]\nTerminal YouTube Music Player", expand=False))
-        console.print("Use [bold]chillguy play <query>[/bold] to start.")
+        console.print(r"Use [bold]chillguy play <query>[/bold] to start.")
         init_config()
 
 if __name__ == "__main__":
