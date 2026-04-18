@@ -34,7 +34,8 @@ def init_config():
             },
             "ui": {
                 "theme": "chill",
-                "show_lyrics": True
+                "show_lyrics": True,
+                "use_fzf": "auto" # auto, true, false
             },
             "radio": DEFAULT_RADIO_STATIONS
         }

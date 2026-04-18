@@ -8,10 +8,13 @@ from rich import box
 from rich.text import Text
 import time
 import readchar
+import subprocess
+import shutil
+import questionary
 from .player import Player
 from .utils import logger
-
 from .config import load_config
+
 
 console = Console()
 
@@ -28,6 +31,57 @@ def get_theme_style():
         "rose": "red"
     }
     return themes.get(theme, "cyan")
+
+def select_interactive(prompt: str, choices: list[str]) -> str | None:
+    """Interactively select an option using fzf if available, otherwise questionary."""
+    if not choices:
+        return None
+        
+    config = load_config()
+    use_fzf = config.get("ui", {}).get("use_fzf", "auto")
+    
+    fzf_available = shutil.which("fzf") is not None
+    
+    should_use_fzf = False
+    if use_fzf == "true":
+        should_use_fzf = True
+        if not fzf_available:
+            logger.warning("fzf forced in config but not found on system. Falling back to questionary.")
+            should_use_fzf = False
+    elif use_fzf == "auto":
+        should_use_fzf = fzf_available
+    
+    if should_use_fzf:
+        try:
+            # fzf uses stderr for the UI, so we need to handle that if needed
+            # but usually it's fine to just run it.
+            # We pass choices via stdin.
+            input_str = "\n".join(choices)
+            cmd = ["fzf", "--height", "40%", "--layout=reverse", "--border", "--prompt", f"{prompt} > "]
+            
+            process = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=None,
+                text=True
+            )
+            stdout, _ = process.communicate(input=input_str)
+            
+            if process.returncode == 0:
+                selected = stdout.strip()
+                return selected if selected in choices else None
+            return None
+        except Exception as e:
+            logger.error(f"fzf failed: {e}. Falling back to questionary.")
+            # Fallback to questionary below
+            
+    # Fallback to questionary
+    try:
+        return questionary.select(prompt, choices=choices).ask()
+    except Exception as e:
+        logger.error(f"Questionary selection failed: {e}")
+        return None
 
 def create_player_layout(player: Player, position, duration, volume, paused, lyrics=""):
     layout = Layout()

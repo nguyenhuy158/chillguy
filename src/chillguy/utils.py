@@ -33,6 +33,11 @@ def check_dependencies():
     # Optional but recommended for yt-dlp
     js_runtimes = ["node", "deno", "quickjs", "bun"]
     
+    # Optional addons
+    addons = {
+        "fzf": "Used for fuzzy finding in selections (optional)."
+    }
+    
     missing = []
     found = []
     
@@ -44,11 +49,16 @@ def check_dependencies():
             
     found_js = [js for js in js_runtimes if shutil.which(js)]
     
-    return found, missing, found_js
+    found_addons = []
+    for addon, desc in addons.items():
+        if shutil.which(addon):
+            found_addons.append(addon)
+    
+    return found, missing, found_js, found_addons
 
 def doctor():
     """Prints a diagnostic report of the system dependencies."""
-    found, missing, found_js = check_dependencies()
+    found, missing, found_js, found_addons = check_dependencies()
     
     if not missing:
         console.print("[green]✔ All core system dependencies are satisfied![/green]")
@@ -70,6 +80,12 @@ def doctor():
         console.print("  [dim]yt-dlp may fail to extract some YouTube formats. Install Node.js or Deno for best results.[/dim]")
     else:
         console.print(f"\n[green]✔ Found JS runtime: {found_js[0]}[/green]")
+
+    if "fzf" in found_addons:
+        console.print("\n[green]✔ Found fzf: Selection menus will use fuzzy finding.[/green]")
+    else:
+        console.print("\n[dim]ℹ fzf not found: Selection menus will use standard prompts.[/dim]")
+        console.print("  [dim]Install fzf (brew install fzf) for a better experience.[/dim]")
 
 def get_log_path():
     return Path.home() / ".chillguy" / "chillguy.log"

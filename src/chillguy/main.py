@@ -21,7 +21,7 @@ from .config import (
 )
 from .search import search_youtube, get_stream_url
 from .player import Player
-from .ui import create_player_layout
+from .ui import create_player_layout, select_interactive
 
 app = typer.Typer(help="Chillguy: A chill YouTube music player for your terminal.")
 console = Console()
@@ -113,15 +113,15 @@ def edit():
                 options.append(f"{section}.{key} (current: {val})")
         else:
             options.append(f"{section} (current: {values})")
-    selected = questionary.select("Which setting do you want to change?", choices=options + ["Cancel"]).ask()
+    selected = select_interactive("Which setting do you want to change?", choices=options + ["Cancel"])
     if not selected or selected == "Cancel": return
     key_path = selected.split(" (current:")[0]
     
     if key_path == "ui.theme":
-        new_val = questionary.select(
+        new_val = select_interactive(
             "Select Theme:",
             choices=["chill", "lavender", "midnight", "forest", "sunset", "rose"]
-        ).ask()
+        )
     else:
         if "." in key_path:
             section, key = key_path.split(".")
@@ -161,7 +161,7 @@ def favorites(list_favs: bool = typer.Option(False, "--list", "-l", help="List f
         for f in favs: table.add_row(f['title'], f.get('id', 'N/A'))
         console.print(table); return
     choices = [f['title'] for f in favs]
-    selected = questionary.select("Play favorite:", choices=choices).ask()
+    selected = select_interactive("Play favorite:", choices=choices)
     if selected:
         track = next(f for f in favs if f['title'] == selected)
         play_track(track)
@@ -179,7 +179,7 @@ def history(list_history: bool = typer.Option(False, "--list", "-l", help="List 
         for i in items: table.add_row(i['title'], i.get('id', 'N/A'))
         console.print(table); return
     choices = [i['title'] for i in items]
-    selected = questionary.select("Play history:", choices=choices).ask()
+    selected = select_interactive("Play history:", choices=choices)
     if selected:
         track = next(i for i in items if i['title'] == selected)
         play_track(track)
@@ -189,7 +189,7 @@ def radio():
     """Listen to chill radio."""
     stations = get_radio_stations()
     choices = [s['name'] for s in stations]
-    selected = questionary.select("Select Station:", choices=choices).ask()
+    selected = select_interactive("Select Station:", choices=choices)
     if selected:
         s = next(st for st in stations if st['name'] == selected)
         play_track({"title": s['name'], "url": s['url'], "id": None})
@@ -267,7 +267,7 @@ def play(query: str = typer.Argument(None), best: bool = False):
     player.clear_queue()
     if len(results) > 1 and not best and "playlist" not in query.lower():
         choices = [f"{r['title']} ({r.get('duration_string', '??:??')})" for r in results[:10]]
-        sel = questionary.select("Select:", choices=choices).ask()
+        sel = select_interactive("Select:", choices=choices)
         if not sel: return
         player.add_to_queue(results[choices.index(sel)])
     else:
