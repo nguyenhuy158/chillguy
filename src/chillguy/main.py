@@ -19,7 +19,7 @@ from .config import (
     add_favorite, get_config_path, get_history, add_to_history, 
     get_radio_stations
 )
-from .search import search_youtube, get_stream_url
+from .search import search_youtube, get_stream_url, get_playlist_tracks
 from .player import Player
 from .ui import create_player_layout, select_interactive
 
@@ -257,14 +257,18 @@ def run_player_loop(p: Player):
     global skip_requested, back_requested, exit_requested
     with Live(auto_refresh=True, screen=True) as live:
         while not exit_requested:
-            if skip_requested or back_requested: break
-            pos = p.get_property("time-pos") or 0
-            dur = p.get_property("duration") or 0
-            vol = p.get_property("volume") or 0
-            paused = p.get_property("pause")
-            live.update(create_player_layout(p, pos, dur, vol, paused))
-            if dur > 0 and pos >= dur - 0.5: break
-            time.sleep(0.1)
+            try:
+                if skip_requested or back_requested: break
+                pos = p.get_property("time-pos") or 0
+                dur = p.get_property("duration") or 0
+                vol = p.get_property("volume") or 0
+                paused = p.get_property("pause")
+                live.update(create_player_layout(p, pos, dur, vol, paused))
+                if dur > 0 and pos >= dur - 0.5: break
+                time.sleep(0.1)
+            except Exception as e:
+                logger.error(f"UI Update loop error: {e}")
+                time.sleep(1) # Wait a bit before retrying to avoid spamming logs
 
 @app.command()
 def play(query: str = typer.Argument(None), best: bool = False):
@@ -278,13 +282,51 @@ def play(query: str = typer.Argument(None), best: bool = False):
     if not results:
         console.print("[red]No results.[/red]"); return
     player.clear_queue()
-    if len(results) > 1 and not best and "playlist" not in query.lower():
-        choices = [f"{r['title']} ({r.get('duration_string', '??:??')})" for r in results[:10]]
+    
+    if len(results) > 1 and not best:
+        # Create choices with [Music] or [Playlist] tag
+        choices = []
+        for r in results[:10]:
+            rtype = r.get('_type_label', 'Music')
+            if rtype == 'Playlist':
+                count = r.get('playlist_count') or r.get('item_count') or r.get('n_entries') or '?'
+                duration = f"{count} tracks"
+            else:
+                duration = r.get('duration_string') or r.get('duration') or '??:??'
+                if isinstance(duration, (int, float)):
+                    m, s = divmod(int(duration), 60)
+                    duration = f"{m:02d}:{s:02d}"
+            choices.append(f"[{rtype}] {r['title']} ({duration})")
+            
         sel = select_interactive("Select:", choices=choices)
         if not sel: return
-        player.add_to_queue(results[choices.index(sel)])
+        selected = results[choices.index(sel)]
+        
+        if selected.get('_type_label') == 'Playlist':
+            with console.status("[bold cyan]Loading playlist tracks..."):
+                url = selected.get('webpage_url') or selected.get('url') or selected.get('id')
+                if url and not url.startswith('http'):
+                    url = f"https://www.youtube.com/playlist?list={url}"
+                tracks = get_playlist_tracks(url)
+                for t in tracks: player.add_to_queue(t)
+        else:
+            player.add_to_queue(selected)
     else:
-        for r in results: player.add_to_queue(r)
+        # For best match or single result, if it's a playlist we still might want to expand it
+        selected = results[0]
+        if selected.get('_type_label') == 'Playlist':
+            with console.status("[bold cyan]Loading playlist tracks..."):
+                url = selected.get('webpage_url') or selected.get('url') or selected.get('id')
+                if url and not url.startswith('http'):
+                    url = f"https://www.youtube.com/playlist?list={url}"
+                tracks = get_playlist_tracks(url)
+                for t in tracks: player.add_to_queue(t)
+        else:
+            for r in results: player.add_to_queue(r)
+            
+    if not player.queue:
+        console.print("[red]No tracks found.[/red]"); return
+        
     player.current_index = 0
     play_queue()
 

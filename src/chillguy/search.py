@@ -7,8 +7,9 @@ def search_youtube(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
     logger.info(f"Searching YouTube for: {query}")
     ydl_opts = {
         'format': 'bestaudio/best',
-        'noplaylist': False, # Allow playlists
+        'noplaylist': True, 
         'quiet': True,
+        'no_warnings': True,
         'extract_flat': True,
         'socket_timeout': 10,
     }
@@ -24,12 +25,22 @@ def search_youtube(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
                 logger.info("Found single video from URL.")
                 return [info]
             
-            # Otherwise search
-            search_query = f"ytsearch{max_results}:{query}"
-            info = ydl.extract_info(search_query, download=False)
-            entries = info.get('entries', [])
-            logger.info(f"Search returned {len(entries)} results.")
-            return entries
+            # Search for videos
+            video_search = f"ytsearch{max_results}:{query}"
+            video_info = ydl.extract_info(video_search, download=False)
+            videos = video_info.get('entries', [])
+            for v in videos: v['_type_label'] = 'Music'
+            
+            # Search for playlists
+            playlist_search = f"ytsearchplaylist{max_results}:{query}"
+            playlist_info = ydl.extract_info(playlist_search, download=False)
+            playlists = playlist_info.get('entries', [])
+            for p in playlists: p['_type_label'] = 'Playlist'
+            
+            # Combine and return
+            results = videos + playlists
+            logger.info(f"Search returned {len(videos)} videos and {len(playlists)} playlists.")
+            return results
         except Exception as e:
             logger.exception("YouTube search failed")
             return []
@@ -39,6 +50,7 @@ def get_playlist_tracks(url: str) -> List[Dict[str, Any]]:
     ydl_opts = {
         'extract_flat': True,
         'quiet': True,
+        'no_warnings': True,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
@@ -55,6 +67,7 @@ def get_stream_url(video_id: str) -> str:
     ydl_opts = {
         'format': 'bestaudio/best',
         'quiet': True,
+        'no_warnings': True,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(video_id, download=False)

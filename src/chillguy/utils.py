@@ -96,7 +96,9 @@ def doctor():
 
     if not found_js:
         console.print("\n[yellow]⚠ No JavaScript runtime found (node, deno, etc.).[/yellow]")
-        console.print("  [dim]yt-dlp may fail to extract some YouTube formats. Install Node.js or Deno for best results.[/dim]")
+        console.print("  [dim]yt-dlp may fail to extract some YouTube formats. We recommend installing Node.js or Deno.[/dim]")
+        console.print("  [dim]macOS: brew install node[/dim]")
+        console.print("  [dim]Linux: sudo apt install nodejs[/dim]")
     else:
         console.print(f"\n[green]✔ Found JS runtime: {found_js[0]}[/green]")
 

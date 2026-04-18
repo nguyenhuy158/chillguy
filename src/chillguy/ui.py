@@ -120,22 +120,22 @@ def create_player_layout(player: Player, position, duration, volume, paused, lyr
 
     # Main Player Panel
     # Use escape() to handle titles with [ or ]
-    safe_title = escape(track_title)
+    safe_title = escape(str(track_title))
     
     time_info = f"{format_time(position)} / {format_time(duration)}"
     if position == 0 and duration == 0:
         time_info = "Loading..."
 
-    track_info = (
-        f"[bold white]{safe_title}[/bold white]\n"
-        f"{time_info}\n"
-        f"Volume: {volume}% | Shuffle: {'On' if player.shuffle else 'Off'} | Repeat: {player.repeat}"
-    )
+    # Use Text object for track_info to avoid markup issues with dynamic content
+    track_info_text = Text()
+    track_info_text.append(f"{safe_title}\n", style="bold white")
+    track_info_text.append(f"{time_info}\n")
+    track_info_text.append(f"Volume: {volume}% | Shuffle: {'On' if player.shuffle else 'Off'} | Repeat: {player.repeat}", style="dim")
     
     pb = ProgressBar(total=100, completed=progress, width=40)
     
     player_panel = Panel(
-        Group(Text.from_markup(track_info), "", pb),
+        Group(track_info_text, "", pb),
         title="Now Playing",
         box=box.ROUNDED,
         padding=(1, 2),
@@ -147,9 +147,9 @@ def create_player_layout(player: Player, position, duration, volume, paused, lyr
     queue_table.add_column("Up Next", style="dim")
     
     for i, track in enumerate(player.queue[player.current_index + 1 : player.current_index + 6]):
-        title = track.get('title', 'Unknown')
+        title = str(track.get('title', 'Unknown'))
         if len(title) > 30: title = title[:27] + "..."
-        queue_table.add_row(f"{i+1}. {title}")
+        queue_table.add_row(f"{i+1}. {escape(title)}")
         
     queue_panel = Panel(queue_table, title="Queue", box=box.ROUNDED, border_style=style)
 
