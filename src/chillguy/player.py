@@ -4,6 +4,8 @@ import socket
 import os
 import tempfile
 import time
+import atexit
+import signal
 from threading import Thread
 from .utils import logger
 
@@ -16,6 +18,7 @@ class Player:
         self.shuffle = False
         self.repeat = "none" # none, one, all
         self._stop_requested = False
+        atexit.register(self.stop)
 
     @property
     def current_track(self):
@@ -43,7 +46,10 @@ class Player:
         
         # Ensure old socket is gone
         if os.path.exists(self.ipc_path):
-            os.remove(self.ipc_path)
+            try:
+                os.remove(self.ipc_path)
+            except OSError:
+                pass
 
         cmd = [
             "mpv",
@@ -52,6 +58,7 @@ class Player:
             "--idle=yes",
             "--force-window=no",
             "--no-terminal",
+            f"--force-media-title={title}",
             url
         ]
         
@@ -61,11 +68,12 @@ class Player:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
                 text=True,
-                bufsize=1
+                bufsize=1,
+                preexec_fn=os.setsid # Create process group to kill children too
             )
             
             # Wait for IPC to start with timeout
-            max_retries = 30 # Increased from 20
+            max_retries = 30 
             for i in range(max_retries):
                 if os.path.exists(self.ipc_path):
                     # Test connection
@@ -116,9 +124,35 @@ class Player:
 
     def stop(self):
         if self.process:
-            self._send_command("quit")
-            self.process.terminate()
+            logger.info("Stopping mpv process...")
+            try:
+                # Try graceful quit via IPC
+                self._send_command("quit")
+                
+                # Wait a bit
+                for _ in range(10):
+                    if self.process.poll() is not None:
+                        break
+                    time.sleep(0.1)
+                
+                if self.process.poll() is None:
+                    # Try SIGTERM to the process group
+                    os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
+                    
+                    for _ in range(5):
+                        if self.process.poll() is not None:
+                            break
+                        time.sleep(0.1)
+                
+                if self.process.poll() is None:
+                    # Aggressive SIGKILL
+                    logger.warning("mpv still running, sending SIGKILL...")
+                    os.killpg(os.getpgid(self.process.pid), signal.SIGKILL)
+            except Exception as e:
+                logger.error(f"Error during player stop: {e}")
+            
             self.process = None
+            
         if os.path.exists(self.ipc_path):
             try:
                 os.remove(self.ipc_path)

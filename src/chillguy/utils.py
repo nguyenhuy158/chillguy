@@ -1,11 +1,30 @@
 import shutil
 import logging
 import os
+import sys
+import fcntl
 from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 
 console = Console()
+
+LOCK_FILE = Path.home() / ".chillguy" / "chillguy.lock"
+
+def ensure_single_instance():
+    """Ensure only one instance of chillguy is running."""
+    lock_dir = Path.home() / ".chillguy"
+    if not lock_dir.exists():
+        lock_dir.mkdir(parents=True)
+    
+    # Open or create lock file
+    try:
+        global _lock_file_handle
+        _lock_file_handle = open(LOCK_FILE, "w")
+        fcntl.flock(_lock_file_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (IOError, OSError):
+        console.print("[red]Error: Another instance of chillguy is already running.[/red]")
+        sys.exit(1)
 
 def get_logger():
     log_dir = Path.home() / ".chillguy"

@@ -13,7 +13,7 @@ import time
 from threading import Thread
 import readchar
 
-from .utils import logger, doctor as run_doctor, read_logs, get_log_path
+from .utils import logger, doctor as run_doctor, read_logs, get_log_path, ensure_single_instance
 from .config import (
     init_config, load_config, save_config, get_favorites, 
     add_favorite, get_config_path, get_history, add_to_history, 
@@ -31,10 +31,11 @@ player = Player()
 current_track_data = None
 skip_requested = False
 back_requested = False
+exit_requested = False
 
 def key_listener(p: Player):
-    global current_track_data, skip_requested, back_requested
-    while True:
+    global current_track_data, skip_requested, back_requested, exit_requested
+    while not exit_requested:
         try:
             key = readchar.readkey()
             if key == ' ':
@@ -66,9 +67,9 @@ def key_listener(p: Player):
                     if add_favorite(current_track_data):
                         logger.info(f"Added {current_track_data['title']} to favorites.")
             elif key == 'q':
+                exit_requested = True
                 p.stop()
-                p.clear_queue()
-                os._exit(0)
+                break
         except Exception as e:
             logger.debug(f"Key listener error: {e}")
             break
@@ -217,10 +218,15 @@ def play_track(track):
     play_queue()
 
 def play_queue():
-    global skip_requested, back_requested, current_track_data
-    kt = Thread(target=key_listener, args=(player,), daemon=True)
-    kt.start()
-    while 0 <= player.current_index < len(player.queue):
+    global skip_requested, back_requested, current_track_data, exit_requested
+    
+    # Check if thread is already running
+    if not hasattr(play_queue, "_thread_started"):
+        kt = Thread(target=key_listener, args=(player,), daemon=True)
+        kt.start()
+        play_queue._thread_started = True
+
+    while 0 <= player.current_index < len(player.queue) and not exit_requested:
         track = player.queue[player.current_index]
         current_track_data = track
         add_to_history(track)
@@ -234,6 +240,10 @@ def play_queue():
         skip_requested = False
         back_requested = False
         run_player_loop(player)
+        
+        if exit_requested:
+            break
+            
         if back_requested: player.current_index = max(0, player.current_index - 1)
         elif player.repeat == "one": pass
         else:
@@ -242,9 +252,9 @@ def play_queue():
             else: player.current_index += 1
 
 def run_player_loop(p: Player):
-    global skip_requested, back_requested
+    global skip_requested, back_requested, exit_requested
     with Live(auto_refresh=True, screen=True) as live:
-        while True:
+        while not exit_requested:
             if skip_requested or back_requested: break
             pos = p.get_property("time-pos") or 0
             dur = p.get_property("duration") or 0
@@ -257,6 +267,7 @@ def run_player_loop(p: Player):
 @app.command()
 def play(query: str = typer.Argument(None), best: bool = False):
     """Play from YouTube."""
+    ensure_single_instance()
     if not query:
         query = questionary.text("Search:").ask()
         if not query: return
