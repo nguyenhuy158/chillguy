@@ -3,7 +3,7 @@ import questionary
 from rich.console import Console
 from rich.panel import Panel
 from .utils import doctor as run_doctor
-from .config import init_config, load_config, get_favorites, add_favorite, get_config_path, get_favorites_path
+from .config import init_config, load_config, save_config, get_favorites, add_favorite, get_config_path, get_favorites_path
 from .search import search_youtube, get_stream_url
 from .player import Player
 from .ui import interactive_player
@@ -85,18 +85,58 @@ def config_main(ctx: typer.Context):
 
 @config_app.command()
 def edit():
-    """Edit configuration file in your default editor."""
+    """Interactively edit configuration settings."""
     init_config()
-    path = get_config_path()
-    editor = os.environ.get("EDITOR", "nano")
+    cfg = load_config()
     
-    console.print(f"[bold cyan]Opening {path} with {editor}...[/bold cyan]")
-    try:
-        import subprocess
-        subprocess.run([editor, str(path)], check=True)
-    except Exception as e:
-        console.print(f"[red]Failed to open editor: {e}[/red]")
-        console.print(f"You can manually edit the file at: [bold]{path}[/bold]")
+    # Flatten config for selection
+    options = []
+    for section, values in cfg.items():
+        if isinstance(values, dict):
+            for key, val in values.items():
+                options.append(f"{section}.{key} (current: {val})")
+        else:
+            options.append(f"{section} (current: {values})")
+    
+    selected = questionary.select(
+        "Which setting do you want to change?",
+        choices=options + ["Cancel"]
+    ).ask()
+    
+    if not selected or selected == "Cancel":
+        return
+
+    key_path = selected.split(" (current:")[0]
+    
+    if "." in key_path:
+        section, key = key_path.split(".")
+        current_val = cfg[section][key]
+    else:
+        section, key = None, key_path
+        current_val = cfg[key]
+        
+    new_val = questionary.text(f"Enter new value for {key_path}:", default=str(current_val)).ask()
+    
+    if new_val is None:
+        return
+        
+    # Simple type conversion
+    if isinstance(current_val, int):
+        try:
+            new_val = int(new_val)
+        except ValueError:
+            console.print("[red]Value must be an integer.[/red]")
+            return
+    elif isinstance(current_val, bool):
+        new_val = new_val.lower() in ("true", "yes", "1", "y")
+
+    if section:
+        cfg[section][key] = new_val
+    else:
+        cfg[key] = new_val
+        
+    save_config(cfg)
+    console.print(f"[green]✔ Updated {key_path} to {new_val}[/green]")
 
 @app.command()
 def favorites(

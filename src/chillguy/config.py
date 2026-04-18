@@ -38,6 +38,11 @@ def load_config():
     with open(CONFIG_FILE, "r") as f:
         return toml.load(f)
 
+def save_config(config_data):
+    init_config()
+    with open(CONFIG_FILE, "w") as f:
+        toml.dump(config_data, f)
+
 def get_favorites():
     init_config()
     with open(FAVORITES_FILE, "r") as f:
