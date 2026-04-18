@@ -58,3 +58,9 @@ def remove_favorite(track_id):
     with open(FAVORITES_FILE, "w") as f:
         json.dump(new_favs, f)
     return len(favs) != len(new_favs)
+
+def get_config_path():
+    return CONFIG_FILE
+
+def get_favorites_path():
+    return FAVORITES_FILE

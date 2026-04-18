@@ -1,6 +1,6 @@
 [project]
 name = "chillguy"
-version = "0.1.3"
+version = "0.1.4"
 description = "A terminal-based YouTube music player designed for simplicity and style."
 authors = [{ name = "Nguyen Huy", email = "nguyenhuy158@gmail.com" }]
 dependencies = [

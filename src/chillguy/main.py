@@ -3,14 +3,18 @@ import questionary
 from rich.console import Console
 from rich.panel import Panel
 from .utils import doctor as run_doctor
-from .config import init_config, load_config, get_favorites, add_favorite
+from .config import init_config, load_config, get_favorites, add_favorite, get_config_path, get_favorites_path
 from .search import search_youtube, get_stream_url
 from .player import Player
 from .ui import interactive_player
-from .utils import logger
+from .utils import logger, doctor as run_doctor, read_logs, get_log_path
 import sys
+import os
 from threading import Thread
 import readchar
+from rich.table import Table
+from rich import box
+import time
 
 app = typer.Typer(help="Chillguy: A chill YouTube music player for your terminal.")
 console = Console()
@@ -51,13 +55,50 @@ def doctor():
     run_doctor()
 
 @app.command()
-def favorites():
+def config():
+    """Show current configuration."""
+    init_config()
+    cfg = load_config()
+    path = get_config_path()
+    
+    console.print(Panel(f"[bold cyan]Configuration[/bold cyan]\n[dim]Path: {path}[/dim]", expand=False))
+    
+    table = Table(box=box.ROUNDED)
+    table.add_column("Section", style="cyan")
+    table.add_column("Key", style="yellow")
+    table.add_column("Value", style="green")
+    
+    for section, values in cfg.items():
+        if isinstance(values, dict):
+            for key, val in values.items():
+                table.add_row(section, key, str(val))
+        else:
+            table.add_row("root", section, str(values))
+            
+    console.print(table)
+
+@app.command()
+def favorites(
+    list_favs: bool = typer.Option(False, "--list", "-l", help="List all favorites in a table")
+):
     """List and play your favorite tracks."""
     favs = get_favorites()
     if not favs:
         console.print("[yellow]You haven't added any favorites yet.[/yellow]")
         return
     
+    if list_favs:
+        table = Table(title="Your Favorites", box=box.ROUNDED)
+        table.add_column("Title", style="white")
+        table.add_column("Duration", style="dim")
+        table.add_column("ID", style="dim")
+        
+        for f in favs:
+            table.add_row(f['title'], f.get('duration_string', '??:??'), f.get('id', 'N/A'))
+        
+        console.print(table)
+        return
+
     choices = [f"{f['title']}" for f in favs]
     selected_title = questionary.select(
         "Your Favorites:",
@@ -68,44 +109,37 @@ def favorites():
         selected = next(f for f in favs if f['title'] == selected_title)
         play_track(selected)
 
-def play_track(track):
-    global current_track_data
-    current_track_data = track
-    
-    logger.info(f"Preparing to play: {track['title']}")
-    with console.status(f"[bold green]Fetching stream for {track['title']}..."):
+@app.command()
+def log(
+    lines: int = typer.Option(20, "--lines", "-n", help="Number of lines to show"),
+    follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output")
+):
+    """View application logs."""
+    log_path = get_log_path()
+    if not log_path.exists():
+        console.print("[red]Log file not found.[/red]")
+        return
+
+    if follow:
+        console.print(f"[bold cyan]Following logs at {log_path}... (Ctrl+C to stop)[/bold cyan]")
         try:
-            stream_url = get_stream_url(track['id'] if 'id' in track else track['url'])
-        except Exception as e:
-            logger.exception("Failed to get stream URL")
-            console.print(f"[red]Error fetching stream: {e}[/red]")
+            with open(log_path, "r") as f:
+                f.seek(0, os.SEEK_END)
+                while True:
+                    line = f.readline()
+                    if not line:
+                        time.sleep(0.1)
+                        continue
+                    console.print(line.strip())
+        except KeyboardInterrupt:
             return
-
-    if not stream_url:
-        logger.error("Could not extract stream URL.")
-        console.print("[red]Could not extract stream URL.[/red]")
-        return
-
-    if not player.start(stream_url, track['title']):
-        logger.error("Player failed to start.")
-        console.print("[red]Failed to start playback. Check ~/.chillguy/chillguy.log for details.[/red]")
-        return
-    
-    # Start key listener thread
-    kt = Thread(target=key_listener, args=(player,), daemon=True)
-    kt.start()
-    
-    try:
-        interactive_player(player, track['title'])
-    except KeyboardInterrupt:
-        player.stop()
-    except Exception as e:
-        logger.exception("Error in interactive player")
-    finally:
-        player.stop()
+    else:
+        content = read_logs(lines)
+        console.print(Panel(content, title=f"Last {lines} lines of chillguy.log", box=box.ROUNDED))
 
 @app.command()
 def play(
+
     query: str = typer.Argument(None, help="Search query or YouTube URL"),
     best: bool = typer.Option(False, "--best", "-b", help="Auto-select the best match")
 ):

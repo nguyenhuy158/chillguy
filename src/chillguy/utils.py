@@ -30,6 +30,9 @@ def check_dependencies():
         "yt-dlp": "Used for YouTube metadata and stream extraction."
     }
     
+    # Optional but recommended for yt-dlp
+    js_runtimes = ["node", "deno", "quickjs", "bun"]
+    
     missing = []
     found = []
     
@@ -39,14 +42,16 @@ def check_dependencies():
         else:
             missing.append((dep, desc))
             
-    return found, missing
+    found_js = [js for js in js_runtimes if shutil.which(js)]
+    
+    return found, missing, found_js
 
 def doctor():
     """Prints a diagnostic report of the system dependencies."""
-    found, missing = check_dependencies()
+    found, missing, found_js = check_dependencies()
     
     if not missing:
-        console.print("[green]✔ All system dependencies are satisfied![/green]")
+        console.print("[green]✔ All core system dependencies are satisfied![/green]")
         for dep in found:
             console.print(f"  - {dep} found at {shutil.which(dep)}")
     else:
@@ -59,3 +64,21 @@ def doctor():
                 console.print("    [dim]Install via: pip install yt-dlp or brew install yt-dlp[/dim]")
         
         console.print("\n[yellow]Please install the missing tools to use chillguy.[/yellow]")
+
+    if not found_js:
+        console.print("\n[yellow]⚠ No JavaScript runtime found (node, deno, etc.).[/yellow]")
+        console.print("  [dim]yt-dlp may fail to extract some YouTube formats. Install Node.js or Deno for best results.[/dim]")
+    else:
+        console.print(f"\n[green]✔ Found JS runtime: {found_js[0]}[/green]")
+
+def get_log_path():
+    return Path.home() / ".chillguy" / "chillguy.log"
+
+def read_logs(lines: int = 20):
+    log_file = get_log_path()
+    if not log_file.exists():
+        return "Log file not found."
+    
+    with open(log_file, "r") as f:
+        content = f.readlines()
+        return "".join(content[-lines:])
