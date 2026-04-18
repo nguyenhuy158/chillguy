@@ -31,6 +31,7 @@ class Player:
             f"--input-ipc-server={self.ipc_path}",
             "--idle=yes",
             "--force-window=no",
+            "--no-terminal",
             url
         ]
         
@@ -39,22 +40,25 @@ class Player:
                 cmd,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
+                bufsize=1
             )
             
             # Wait for IPC to start with timeout
-            max_retries = 20
+            max_retries = 30 # Increased from 20
             for i in range(max_retries):
                 if os.path.exists(self.ipc_path):
-                    logger.info("mpv IPC socket found.")
-                    break
+                    # Test connection
+                    if self._send_command("get_property", "mpv-version"):
+                        logger.info("mpv IPC socket found and responding.")
+                        break
                 if self.process.poll() is not None:
                     error_output = self.process.stderr.read()
                     logger.error(f"mpv exited immediately with code {self.process.returncode}: {error_output}")
                     return False
                 time.sleep(0.1)
             else:
-                logger.error("mpv IPC socket timed out.")
+                logger.error("mpv IPC socket timed out or not responding.")
                 return False
                 
             return True

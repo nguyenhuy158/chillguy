@@ -41,6 +41,11 @@ Play music:
 chillguy play "lofi hip hop radio"
 ```
 
+Play the best match immediately:
+```bash
+chillguy play "lofi hip hop radio" -b
+```
+
 ## 📜 License
 
 MIT

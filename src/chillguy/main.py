@@ -105,12 +105,19 @@ def play_track(track):
         player.stop()
 
 @app.command()
-def play(query: str = typer.Argument(None, help="Search query or YouTube URL")):
+def play(
+    query: str = typer.Argument(None, help="Search query or YouTube URL"),
+    best: bool = typer.Option(False, "--best", "-b", help="Auto-select the best match")
+):
     """Play music from YouTube."""
     init_config()
     
     if not query:
-        query = questionary.text("What do you want to listen to?").ask()
+        try:
+            query = questionary.text("What do you want to listen to?").ask()
+        except Exception as e:
+            logger.error(f"Failed to get query from questionary: {e}")
+            return
         if not query:
             return
 
@@ -122,22 +129,27 @@ def play(query: str = typer.Argument(None, help="Search query or YouTube URL")):
         return
 
     # If multiple results, let user choose
-    if len(results) > 1:
+    selected = None
+    if len(results) > 1 and not best:
         if not sys.stdin.isatty():
             logger.info("Not a TTY, auto-selecting first result.")
             selected = results[0]
         else:
-            choices = [f"{r['title']} ({r.get('duration_string', '??:??')})" for r in results]
-            selected_label = questionary.select(
-                "Select a track:",
-                choices=choices
-            ).ask()
-            
-            if selected_label is None:
-                return
-            
-            idx = choices.index(selected_label)
-            selected = results[idx]
+            try:
+                choices = [f"{r['title']} ({r.get('duration_string', '??:??')})" for r in results]
+                selected_label = questionary.select(
+                    "Select a track:",
+                    choices=choices
+                ).ask()
+                
+                if selected_label is None:
+                    return
+                
+                idx = choices.index(selected_label)
+                selected = results[idx]
+            except Exception as e:
+                logger.error(f"Interactive selection failed: {e}. Falling back to best match.")
+                selected = results[0]
     else:
         selected = results[0]
 
