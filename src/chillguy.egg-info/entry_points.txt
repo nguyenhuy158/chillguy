@@ -1,2 +1,0 @@
-[console_scripts]
-chillguy = chillguy.main:app
