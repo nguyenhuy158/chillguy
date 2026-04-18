@@ -13,6 +13,7 @@ dependencies = [
 ]
 requires-python = ">=3.10"
 license = { text = "MIT" }
+license-files = ["LICENSE"]
 
 [project.scripts]
 chillguy = "chillguy.main:app"
