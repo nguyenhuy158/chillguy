@@ -2,29 +2,38 @@ import typer
 import questionary
 from rich.console import Console
 from rich.panel import Panel
-from .utils import doctor as run_doctor
-from .config import init_config, load_config, save_config, get_favorites, add_favorite, get_config_path, get_favorites_path
-from .search import search_youtube, get_stream_url
-from .player import Player
-from .ui import interactive_player
-from .utils import logger, doctor as run_doctor, read_logs, get_log_path
-import sys
-import os
-from threading import Thread
-import readchar
 from rich.table import Table
 from rich import box
+from rich.live import Live
+from rich.layout import Layout
+import sys
+import os
+import random
 import time
+from threading import Thread
+import readchar
+
+from .utils import logger, doctor as run_doctor, read_logs, get_log_path
+from .config import (
+    init_config, load_config, save_config, get_favorites, 
+    add_favorite, get_config_path, get_history, add_to_history, 
+    get_radio_stations
+)
+from .search import search_youtube, get_stream_url
+from .player import Player
+from .ui import create_player_layout
 
 app = typer.Typer(help="Chillguy: A chill YouTube music player for your terminal.")
 console = Console()
 player = Player()
 
-# Current track info for favorite toggling
+# State management
 current_track_data = None
+skip_requested = False
+back_requested = False
 
 def key_listener(p: Player):
-    global current_track_data
+    global current_track_data, skip_requested, back_requested
     while True:
         try:
             key = readchar.readkey()
@@ -38,13 +47,28 @@ def key_listener(p: Player):
                 p.adjust_volume(5)
             elif key == '-':
                 p.adjust_volume(-5)
+            elif key == 'n':
+                skip_requested = True
+            elif key == 'b':
+                back_requested = True
+            elif key == 's':
+                p.shuffle = not p.shuffle
+                if p.shuffle:
+                    remaining = p.queue[p.current_index + 1:]
+                    random.shuffle(remaining)
+                    p.queue[p.current_index + 1:] = remaining
+            elif key == 'r':
+                modes = ["none", "one", "all"]
+                curr_idx = modes.index(p.repeat)
+                p.repeat = modes[(curr_idx + 1) % 3]
             elif key == 'f':
                 if current_track_data:
                     if add_favorite(current_track_data):
                         logger.info(f"Added {current_track_data['title']} to favorites.")
             elif key == 'q':
                 p.stop()
-                break
+                p.clear_queue()
+                os._exit(0)
         except Exception as e:
             logger.debug(f"Key listener error: {e}")
             break
@@ -62,25 +86,19 @@ def config_main(ctx: typer.Context):
     """Show current configuration."""
     if ctx.invoked_subcommand is not None:
         return
-
     init_config()
     cfg = load_config()
-    path = get_config_path()
-    
-    console.print(Panel(f"[bold cyan]Configuration[/bold cyan]\n[dim]Path: {path}[/dim]", expand=False))
-    
+    console.print(Panel(f"[bold cyan]Configuration[/bold cyan]\n[dim]Path: {get_config_path()}[/dim]", expand=False))
     table = Table(box=box.ROUNDED)
     table.add_column("Section", style="cyan")
     table.add_column("Key", style="yellow")
     table.add_column("Value", style="green")
-    
     for section, values in cfg.items():
         if isinstance(values, dict):
             for key, val in values.items():
                 table.add_row(section, key, str(val))
         else:
             table.add_row("root", section, str(values))
-            
     console.print(table)
 
 @config_app.command()
@@ -88,8 +106,6 @@ def edit():
     """Interactively edit configuration settings."""
     init_config()
     cfg = load_config()
-    
-    # Flatten config for selection
     options = []
     for section, values in cfg.items():
         if isinstance(values, dict):
@@ -97,164 +113,172 @@ def edit():
                 options.append(f"{section}.{key} (current: {val})")
         else:
             options.append(f"{section} (current: {values})")
-    
-    selected = questionary.select(
-        "Which setting do you want to change?",
-        choices=options + ["Cancel"]
-    ).ask()
-    
-    if not selected or selected == "Cancel":
-        return
-
+    selected = questionary.select("Which setting do you want to change?", choices=options + ["Cancel"]).ask()
+    if not selected or selected == "Cancel": return
     key_path = selected.split(" (current:")[0]
     
+    if key_path == "ui.theme":
+        new_val = questionary.select(
+            "Select Theme:",
+            choices=["chill", "lavender", "midnight", "forest", "sunset", "rose"]
+        ).ask()
+    else:
+        if "." in key_path:
+            section, key = key_path.split(".")
+            current_val = cfg[section][key]
+        else:
+            section, key = None, key_path
+            current_val = cfg[key]
+        new_val = questionary.text(f"Enter new value for {key_path}:", default=str(current_val)).ask()
+
+    if new_val is None: return
+    
+    # Update logic
     if "." in key_path:
         section, key = key_path.split(".")
         current_val = cfg[section][key]
-    else:
-        section, key = None, key_path
-        current_val = cfg[key]
-        
-    new_val = questionary.text(f"Enter new value for {key_path}:", default=str(current_val)).ask()
-    
-    if new_val is None:
-        return
-        
-    # Simple type conversion
-    if isinstance(current_val, int):
-        try:
-            new_val = int(new_val)
-        except ValueError:
-            console.print("[red]Value must be an integer.[/red]")
-            return
-    elif isinstance(current_val, bool):
-        new_val = new_val.lower() in ("true", "yes", "1", "y")
-
-    if section:
+        if isinstance(current_val, int): new_val = int(new_val)
+        elif isinstance(current_val, bool): new_val = str(new_val).lower() in ("true", "yes", "1", "y")
         cfg[section][key] = new_val
     else:
-        cfg[key] = new_val
+        current_val = cfg[key_path]
+        if isinstance(current_val, int): new_val = int(new_val)
+        cfg[key_path] = new_val
         
     save_config(cfg)
     console.print(f"[green]✔ Updated {key_path} to {new_val}[/green]")
 
 @app.command()
-def favorites(
-    list_favs: bool = typer.Option(False, "--list", "-l", help="List all favorites in a table")
-):
-    """List and play your favorite tracks."""
+def favorites(list_favs: bool = typer.Option(False, "--list", "-l", help="List favorites")):
+    """View and play favorites."""
     favs = get_favorites()
     if not favs:
-        console.print("[yellow]You haven't added any favorites yet.[/yellow]")
+        console.print("[yellow]No favorites yet.[/yellow]")
         return
-    
     if list_favs:
-        table = Table(title="Your Favorites", box=box.ROUNDED)
-        table.add_column("Title", style="white")
-        table.add_column("Duration", style="dim")
-        table.add_column("ID", style="dim")
-        
-        for f in favs:
-            table.add_row(f['title'], f.get('duration_string', '??:??'), f.get('id', 'N/A'))
-        
-        console.print(table)
-        return
-
-    choices = [f"{f['title']}" for f in favs]
-    selected_title = questionary.select(
-        "Your Favorites:",
-        choices=choices
-    ).ask()
-    
-    if selected_title:
-        selected = next(f for f in favs if f['title'] == selected_title)
-        play_track(selected)
+        table = Table(title="Favorites", box=box.ROUNDED)
+        table.add_column("Title"); table.add_column("ID", style="dim")
+        for f in favs: table.add_row(f['title'], f.get('id', 'N/A'))
+        console.print(table); return
+    choices = [f['title'] for f in favs]
+    selected = questionary.select("Play favorite:", choices=choices).ask()
+    if selected:
+        track = next(f for f in favs if f['title'] == selected)
+        play_track(track)
 
 @app.command()
-def log(
-    lines: int = typer.Option(20, "--lines", "-n", help="Number of lines to show"),
-    follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output")
-):
-    """View application logs."""
-    log_path = get_log_path()
-    if not log_path.exists():
-        console.print("[red]Log file not found.[/red]")
+def history(list_history: bool = typer.Option(False, "--list", "-l", help="List history")):
+    """View and play history."""
+    items = get_history()
+    if not items:
+        console.print("[yellow]History empty.[/yellow]")
         return
+    if list_history:
+        table = Table(title="History", box=box.ROUNDED)
+        table.add_column("Title"); table.add_column("ID", style="dim")
+        for i in items: table.add_row(i['title'], i.get('id', 'N/A'))
+        console.print(table); return
+    choices = [i['title'] for i in items]
+    selected = questionary.select("Play history:", choices=choices).ask()
+    if selected:
+        track = next(i for i in items if i['title'] == selected)
+        play_track(track)
 
+@app.command()
+def radio():
+    """Listen to chill radio."""
+    stations = get_radio_stations()
+    choices = [s['name'] for s in stations]
+    selected = questionary.select("Select Station:", choices=choices).ask()
+    if selected:
+        s = next(st for st in stations if st['name'] == selected)
+        play_track({"title": s['name'], "url": s['url'], "id": None})
+
+@app.command()
+def log(lines: int = 20, follow: bool = False):
+    """View logs."""
+    path = get_log_path()
     if follow:
-        console.print(f"[bold cyan]Following logs at {log_path}... (Ctrl+C to stop)[/bold cyan]")
         try:
-            with open(log_path, "r") as f:
+            with open(path, "r") as f:
                 f.seek(0, os.SEEK_END)
                 while True:
                     line = f.readline()
-                    if not line:
-                        time.sleep(0.1)
-                        continue
+                    if not line: time.sleep(0.1); continue
                     console.print(line.strip())
-        except KeyboardInterrupt:
-            return
+        except KeyboardInterrupt: return
     else:
-        content = read_logs(lines)
-        console.print(Panel(content, title=f"Last {lines} lines of chillguy.log", box=box.ROUNDED))
+        console.print(Panel(read_logs(lines), title="Logs"))
+
+def play_track(track):
+    player.clear_queue()
+    player.add_to_queue(track)
+    player.current_index = 0
+    play_queue()
+
+def play_queue():
+    global skip_requested, back_requested, current_track_data
+    kt = Thread(target=key_listener, args=(player,), daemon=True)
+    kt.start()
+    while 0 <= player.current_index < len(player.queue):
+        track = player.queue[player.current_index]
+        current_track_data = track
+        add_to_history(track)
+        with console.status(f"[bold green]Streaming {track['title']}..."):
+            try:
+                url = get_stream_url(track.get('id') or track.get('url'))
+                if not url or not player.start(url, track['title']):
+                    player.current_index += 1; continue
+            except Exception:
+                player.current_index += 1; continue
+        skip_requested = False
+        back_requested = False
+        run_player_loop(player)
+        if back_requested: player.current_index = max(0, player.current_index - 1)
+        elif player.repeat == "one": pass
+        else:
+            if player.repeat == "all" and player.current_index == len(player.queue) - 1:
+                player.current_index = 0
+            else: player.current_index += 1
+
+def run_player_loop(p: Player):
+    global skip_requested, back_requested
+    with Live(auto_refresh=True, screen=True) as live:
+        while True:
+            if skip_requested or back_requested: break
+            pos = p.get_property("time-pos") or 0
+            dur = p.get_property("duration") or 0
+            vol = p.get_property("volume") or 0
+            paused = p.get_property("pause")
+            live.update(create_player_layout(p, pos, dur, vol, paused))
+            if dur > 0 and pos >= dur - 0.5: break
+            time.sleep(0.1)
 
 @app.command()
-def play(
-
-    query: str = typer.Argument(None, help="Search query or YouTube URL"),
-    best: bool = typer.Option(False, "--best", "-b", help="Auto-select the best match")
-):
-    """Play music from YouTube."""
-    init_config()
-    
+def play(query: str = typer.Argument(None), best: bool = False):
+    """Play from YouTube."""
     if not query:
-        try:
-            query = questionary.text("What do you want to listen to?").ask()
-        except Exception as e:
-            logger.error(f"Failed to get query from questionary: {e}")
-            return
-        if not query:
-            return
-
-    with console.status("[bold cyan]Searching YouTube..."):
+        query = questionary.text("Search:").ask()
+        if not query: return
+    with console.status("[bold cyan]Searching..."):
         results = search_youtube(query)
-
     if not results:
-        console.print("[red]No results found.[/red]")
-        return
-
-    # If multiple results, let user choose
-    selected = None
-    if len(results) > 1 and not best:
-        if not sys.stdin.isatty():
-            logger.info("Not a TTY, auto-selecting first result.")
-            selected = results[0]
-        else:
-            try:
-                choices = [f"{r['title']} ({r.get('duration_string', '??:??')})" for r in results]
-                selected_label = questionary.select(
-                    "Select a track:",
-                    choices=choices
-                ).ask()
-                
-                if selected_label is None:
-                    return
-                
-                idx = choices.index(selected_label)
-                selected = results[idx]
-            except Exception as e:
-                logger.error(f"Interactive selection failed: {e}. Falling back to best match.")
-                selected = results[0]
+        console.print("[red]No results.[/red]"); return
+    player.clear_queue()
+    if len(results) > 1 and not best and "playlist" not in query.lower():
+        choices = [f"{r['title']} ({r.get('duration_string', '??:??')})" for r in results[:10]]
+        sel = questionary.select("Select:", choices=choices).ask()
+        if not sel: return
+        player.add_to_queue(results[choices.index(sel)])
     else:
-        selected = results[0]
-
-    play_track(selected)
+        for r in results: player.add_to_queue(r)
+    player.current_index = 0
+    play_queue()
 
 @app.callback(invoke_without_command=True)
 def main(ctx: typer.Context):
     if ctx.invoked_subcommand is None:
         console.print(Panel("[bold cyan]Chillguy[/bold cyan]\nTerminal YouTube Music Player", expand=False))
-        console.print(r"Use [bold]chillguy play <query>[/bold] to start.")
         init_config()
 
 if __name__ == "__main__":

@@ -11,12 +11,32 @@ class Player:
     def __init__(self):
         self.process = None
         self.ipc_path = os.path.join(tempfile.gettempdir(), f"chillguy_mpv_{os.getpid()}.sock")
-        self.current_track = None
+        self.queue = []
+        self.current_index = -1
+        self.shuffle = False
+        self.repeat = "none" # none, one, all
         self._stop_requested = False
+
+    @property
+    def current_track(self):
+        if 0 <= self.current_index < len(self.queue):
+            return self.queue[self.current_index]
+        return None
+
+    def add_to_queue(self, track: dict, position: int = -1):
+        if position == -1:
+            self.queue.append(track)
+        else:
+            self.queue.insert(position, track)
+        logger.info(f"Added to queue: {track.get('title')}")
+
+    def clear_queue(self):
+        self.queue = []
+        self.current_index = -1
+        self.stop()
 
     def start(self, url: str, title: str = "Unknown"):
         self.stop()
-        self.current_track = title
         self._stop_requested = False
         
         logger.info(f"Starting mpv for track: {title}")
