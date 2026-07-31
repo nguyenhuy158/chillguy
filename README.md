@@ -46,6 +46,15 @@ Play the best match immediately:
 chillguy play "lofi hip hop radio" -b
 ```
 
+Play with the full-screen Textual UI (playlist table + now-playing):
+```bash
+chillguy ui "lofi hip hop radio"
+# or
+chillguy play "lofi hip hop radio" --ui
+```
+Requires the optional `tui` extra: `pip install 'chillguy[tui]'`.
+In the UI: `enter` play selected, `space` play/pause, `n` next, `b`/`p` previous, `q` quit.
+
 ## 📜 License
 
 MIT

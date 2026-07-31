@@ -270,19 +270,19 @@ def run_player_loop(p: Player):
                 logger.error(f"UI Update loop error: {e}")
                 time.sleep(1) # Wait a bit before retrying to avoid spamming logs
 
-@app.command()
-def play(query: str = typer.Argument(None), best: bool = False):
-    """Play from YouTube."""
-    ensure_single_instance()
+def _build_queue(query: str, best: bool) -> bool:
+    """Search YouTube and populate `player.queue`. Returns True on success."""
     if not query:
         query = questionary.text("Search:").ask()
-        if not query: return
+        if not query:
+            return False
     with console.status("[bold cyan]Searching..."):
         results = search_youtube(query)
     if not results:
-        console.print("[red]No results.[/red]"); return
+        console.print("[red]No results.[/red]")
+        return False
     player.clear_queue()
-    
+
     if len(results) > 1 and not best:
         # Create choices with [Music] or [Playlist] tag
         choices = []
@@ -297,11 +297,12 @@ def play(query: str = typer.Argument(None), best: bool = False):
                     m, s = divmod(int(duration), 60)
                     duration = f"{m:02d}:{s:02d}"
             choices.append(f"[{rtype}] {r['title']} ({duration})")
-            
+
         sel = select_interactive("Select:", choices=choices)
-        if not sel: return
+        if not sel:
+            return False
         selected = results[choices.index(sel)]
-        
+
         if selected.get('_type_label') == 'Playlist':
             with console.status("[bold cyan]Loading playlist tracks..."):
                 url = selected.get('webpage_url') or selected.get('url') or selected.get('id')
@@ -323,12 +324,51 @@ def play(query: str = typer.Argument(None), best: bool = False):
                 for t in tracks: player.add_to_queue(t)
         else:
             for r in results: player.add_to_queue(r)
-            
+
     if not player.queue:
-        console.print("[red]No tracks found.[/red]"); return
-        
+        console.print("[red]No tracks found.[/red]")
+        return False
+
     player.current_index = 0
-    play_queue()
+    return True
+
+
+def _launch_tui():
+    """Launch the full-screen Textual UI (optional dependency)."""
+    try:
+        from .tui import ChillguyTUI
+    except ImportError:
+        console.print(
+            "[red]Error: the interactive UI requires the 'textual' package.[/red]\n"
+            "[dim]Install it with: pip install 'chillguy[tui]'[/dim]"
+        )
+        raise typer.Exit(1)
+    ChillguyTUI(player).run()
+
+
+@app.command()
+def play(
+    query: str = typer.Argument(None),
+    best: bool = False,
+    ui: bool = typer.Option(False, "--ui", help="Open the full-screen Textual UI instead of the classic player."),
+):
+    """Play from YouTube."""
+    ensure_single_instance()
+    if not _build_queue(query, best):
+        return
+    if ui:
+        _launch_tui()
+    else:
+        play_queue()
+
+
+@app.command()
+def ui(query: str = typer.Argument(None), best: bool = False):
+    """Search and play using the full-screen Textual UI."""
+    ensure_single_instance()
+    if not _build_queue(query, best):
+        return
+    _launch_tui()
 
 @app.callback(invoke_without_command=True)
 def main(ctx: typer.Context):

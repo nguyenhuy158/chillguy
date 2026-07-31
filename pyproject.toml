@@ -18,6 +18,17 @@ license-files = ["LICENSE"]
 [project.scripts]
 chillguy = "chillguy.main:app"
 
+[project.optional-dependencies]
+tui = [
+    "textual>=0.89.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-mock>=3.0.0",
+    "ruff>=0.1.0",
+    "textual>=0.89.0",
+]
+
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"

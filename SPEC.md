@@ -11,6 +11,7 @@
 3.  **Playback Engine (`player.py`)**: Manages a background `mpv` process via JSON IPC for real-time control (play/pause, seek, volume).
 4.  **UI Module (`ui.py`)**: Provides a live-updating dashboard using `rich.live`.
 5.  **Config Manager (`config.py`)**: Manages user data in `~/.chillguy/`.
+6.  **Textual UI (`tui.py`, optional)**: Full-screen playlist + now-playing view built on `textual`, driving the same `Player`/`search.get_stream_url` used elsewhere (no separate playback path). Enabled via the `tui` extra; launched with `chillguy ui` or `chillguy play --ui`.
 
 ## Controls
 - `space`: Toggle Pause
